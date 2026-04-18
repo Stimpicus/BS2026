@@ -358,18 +358,14 @@ void ABS2026Pawn::OnHealthChanged(const FOnAttributeChangeData& ChangeData)
 				{
 					if (const APawn* InstigatorPawn = Cast<APawn>(InstigatorActor))
 					{
-						if (const AController* InstigatorController = InstigatorPawn->GetController())
+						if (AController* InstigatorController = InstigatorPawn->GetController())
 						{
-							if (const APlayerState* InstigatorPS = InstigatorController->PlayerState)
+							if (ABSPlayerState* KillerPS =
+								InstigatorController->GetPlayerState<ABSPlayerState>())
 							{
-								KillerName = InstigatorPS->GetPlayerName();
-
-								if (ABSPlayerState* KillerPS =
-									const_cast<ABSPlayerState*>(Cast<ABSPlayerState>(InstigatorPS)))
-								{
-									KillerPS->AddKill();
-									KillerPS->AddVehicleScore(1);
-								}
+								KillerName = KillerPS->GetPlayerName();
+								KillerPS->AddKill();
+								KillerPS->AddVehicleScore(1);
 							}
 						}
 					}

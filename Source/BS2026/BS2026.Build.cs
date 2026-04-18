@@ -34,7 +34,7 @@ public class BS2026 : ModuleRules
 			"BS2026",
 			"BS2026/SportsCar",
 			"BS2026/OffroadCar",
-			"BS2026/Variant_Offroad",
+			"BS2026/Variant_OffRoad",
 			"BS2026/Variant_TimeTrial",
 			"BS2026/Variant_TimeTrial/UI",
 			// Multiplayer subsystems

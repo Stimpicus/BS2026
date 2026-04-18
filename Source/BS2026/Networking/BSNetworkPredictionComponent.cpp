@@ -211,7 +211,16 @@ void UBSNetworkPredictionComponent::PushInterpState(const FBSPhysicsState& State
 		return;
 	}
 
+	const bool bWasStarved = InterpBuffer.Num() < 2;
 	InterpBuffer.Add(State);
+
+	// If the buffer just became able to interpolate after being starved, reset
+	// the time offset so we don't carry over a stale position from the previous
+	// segment and produce a jump/skip on the first new interval.
+	if (bWasStarved && InterpBuffer.Num() >= 2)
+	{
+		InterpTimeOffset = 0.0f;
+	}
 
 	while (InterpBuffer.Num() > InterpolationBufferSize)
 	{

@@ -69,9 +69,13 @@ private:
 
 	/**
 	 *  Lag-compensated hit trace executed on the server.
-	 *  @param TraceStart    World-space trace origin sent by the client.
-	 *  @param TraceEnd      World-space trace end point sent by the client.
+	 *  @param TraceStart    World-space trace origin derived from the avatar's weapon socket.
+	 *  @param TraceEnd      World-space trace end point derived from the avatar's forward vector.
 	 *  @param ClientPingSec Estimated round-trip ping used to rewind targets.
+	 *
+	 *  Note: trace points are currently computed independently on both client and server via
+	 *  GetTracePoints().  For stricter lag compensation the caller should transmit the
+	 *  client-side points and validate them server-side.
 	 */
 	void ServerPerformHitTrace(const FVector& TraceStart,
 	                           const FVector& TraceEnd,
