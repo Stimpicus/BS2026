@@ -17,7 +17,17 @@ public class BS2026 : ModuleRules
 			"ChaosVehicles",
 			"PhysicsCore",
 			"UMG",
-			"Slate"
+			"Slate",
+			// Networking
+			"NetCore",
+			"NetworkPrediction",
+			// Gameplay Ability System
+			"GameplayAbilities",
+			"GameplayTags",
+			"GameplayTasks",
+			// Online
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {
@@ -26,17 +36,14 @@ public class BS2026 : ModuleRules
 			"BS2026/OffroadCar",
 			"BS2026/Variant_Offroad",
 			"BS2026/Variant_TimeTrial",
-			"BS2026/Variant_TimeTrial/UI"
+			"BS2026/Variant_TimeTrial/UI",
+			// Multiplayer subsystems
+			"BS2026/Networking",
+			"BS2026/Abilities",
+			"BS2026/Session",
+			"BS2026/Experience"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
-
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}
 }
