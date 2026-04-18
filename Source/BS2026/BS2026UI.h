@@ -8,14 +8,14 @@
 
 /**
  *  Simple Vehicle HUD class
- *  Displays the current speed, gear, and health.
+ *  Displays the current speed and gear.
  *  Widget setup is handled in a Blueprint subclass.
  */
 UCLASS(abstract)
 class UBS2026UI : public UUserWidget
 {
 	GENERATED_BODY()
-
+	
 protected:
 
 	/** Controls the display of speed in Km/h or MPH */
@@ -30,13 +30,6 @@ public:
 	/** Called to update the gear display */
 	void UpdateGear(int32 NewGear);
 
-	/**
-	 *  Called when the vehicle's Health attribute changes via GAS.
-	 *  Delivers the raw attribute value (0–MaxHealth) to the Blueprint widget
-	 *  without requiring per-frame polling.
-	 */
-	void UpdateHealth(float NewHealth);
-
 protected:
 
 	/** Implemented in Blueprint to display the new speed */
@@ -46,8 +39,4 @@ protected:
 	/** Implemented in Blueprint to display the new gear */
 	UFUNCTION(BlueprintImplementableEvent, Category="Vehicle")
 	void OnGearUpdate(int32 NewGear);
-
-	/** Implemented in Blueprint to display the new health value */
-	UFUNCTION(BlueprintImplementableEvent, Category="Vehicle")
-	void OnHealthUpdate(float NewHealth);
 };

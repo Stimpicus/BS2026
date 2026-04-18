@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "BS2026Pawn.h"
+#include "BS2026WheelFront.h"
+#include "BS2026WheelRear.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
@@ -10,32 +12,11 @@
 #include "ChaosWheeledVehicleMovementComponent.h"
 #include "BS2026.h"
 #include "TimerManager.h"
-// Networking
-#include "Networking/BSNetworkPredictionComponent.h"
-// Abilities
-#include "Abilities/BSAbilitySystemComponent.h"
-#include "Abilities/BSHealthSet.h"
-#include "AbilitySystemComponent.h"
-#include "GameplayEffectTypes.h"
-// Game state (for kill recording)
-#include "Networking/BSGameState.h"
-#include "Networking/BSPlayerState.h"
-#include "GameFramework/PlayerController.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
 
 ABS2026Pawn::ABS2026Pawn()
 {
-	// ── Replication ───────────────────────────────────────────────────
-	// bReplicates enables actor replication.
-	// SetReplicateMovement(false) prevents the engine's naive Chaos physics
-	// state replication which causes "ghost car" jitter; we own movement
-	// replication through UBSNetworkPredictionComponent instead.
-	bReplicates = true;
-	SetReplicateMovement(false);
-	NetUpdateFrequency = 60.0f;
-
-	// ── Cameras ───────────────────────────────────────────────────────
 	// construct the front camera boom
 	FrontSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Front Spring Arm"));
 	FrontSpringArm->SetupAttachment(GetMesh());
@@ -64,7 +45,6 @@ ABS2026Pawn::ABS2026Pawn()
 	BackCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Back Camera"));
 	BackCamera->SetupAttachment(BackSpringArm);
 
-	// ── Physics ───────────────────────────────────────────────────────
 	// Configure the car mesh
 	GetMesh()->SetSimulatePhysics(true);
 	GetMesh()->SetCollisionProfileName(FName("Vehicle"));
@@ -72,48 +52,6 @@ ABS2026Pawn::ABS2026Pawn()
 	// get the Chaos Wheeled movement component
 	ChaosVehicleMovement = CastChecked<UChaosWheeledVehicleMovementComponent>(GetVehicleMovement());
 
-	// ── Network prediction ────────────────────────────────────────────
-	NetworkPredictionComponent =
-		CreateDefaultSubobject<UBSNetworkPredictionComponent>(TEXT("NetworkPrediction"));
-
-	// ── Gameplay Ability System ───────────────────────────────────────
-	AbilitySystemComponent =
-		CreateDefaultSubobject<UBSAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
-	AbilitySystemComponent->SetIsReplicated(true);
-	// Mixed replication: server applies effects authoritatively;
-	// clients predict locally and receive corrections.
-	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
-
-	// Create the health attribute set as a subobject so it is properly garbage-collected.
-	// It will be registered with the ASC in PossessedBy via AddAttributeSetSubobject.
-	HealthSet = CreateDefaultSubobject<UBSHealthSet>(TEXT("HealthSet"));
-}
-
-UAbilitySystemComponent* ABS2026Pawn::GetAbilitySystemComponent() const
-{
-	return AbilitySystemComponent;
-}
-
-void ABS2026Pawn::PossessedBy(AController* NewController)
-{
-	Super::PossessedBy(NewController);
-
-	// GAS owner/avatar must be initialised on the server
-	if (AbilitySystemComponent && HasAuthority())
-	{
-		AbilitySystemComponent->InitAbilityActorInfo(this, this);
-
-		// Register the attribute set that was pre-created in the constructor
-		AbilitySystemComponent->AddAttributeSetSubobject(HealthSet);
-
-		// Grant all default abilities (fire weapon, respawn, etc.)
-		AbilitySystemComponent->GrantStartupAbilities(DefaultAbilities);
-
-		// Listen for health changes so we can record kills in the game state
-		AbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(
-			UBSHealthSet::GetHealthAttribute())
-			.AddUObject(this, &ABS2026Pawn::OnHealthChanged);
-	}
 }
 
 void ABS2026Pawn::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
@@ -130,7 +68,7 @@ void ABS2026Pawn::SetupPlayerInputComponent(class UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(ThrottleAction, ETriggerEvent::Triggered, this, &ABS2026Pawn::Throttle);
 		EnhancedInputComponent->BindAction(ThrottleAction, ETriggerEvent::Completed, this, &ABS2026Pawn::Throttle);
 
-		// brake 
+		// break 
 		EnhancedInputComponent->BindAction(BrakeAction, ETriggerEvent::Triggered, this, &ABS2026Pawn::Brake);
 		EnhancedInputComponent->BindAction(BrakeAction, ETriggerEvent::Started, this, &ABS2026Pawn::StartBrake);
 		EnhancedInputComponent->BindAction(BrakeAction, ETriggerEvent::Completed, this, &ABS2026Pawn::StopBrake);
@@ -157,16 +95,6 @@ void ABS2026Pawn::SetupPlayerInputComponent(class UInputComponent* PlayerInputCo
 void ABS2026Pawn::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// Initialise GAS actor info on the client side as well
-	if (AbilitySystemComponent && !HasAuthority())
-	{
-		AbilitySystemComponent->InitAbilityActorInfo(this, this);
-
-		// Register the pre-created attribute set on clients too so
-		// attribute replication notifies and change delegates work locally.
-		AbilitySystemComponent->AddAttributeSetSubobject(HealthSet);
-	}
 
 	// set up the flipped check timer
 	GetWorld()->GetTimerManager().SetTimer(FlipCheckTimer, this, &ABS2026Pawn::FlippedCheck, FlipCheckTime, true);
@@ -197,104 +125,132 @@ void ABS2026Pawn::Tick(float Delta)
 
 void ABS2026Pawn::Steering(const FInputActionValue& Value)
 {
+	// route the input
 	DoSteering(Value.Get<float>());
 }
 
 void ABS2026Pawn::Throttle(const FInputActionValue& Value)
 {
+	// route the input
 	DoThrottle(Value.Get<float>());
 }
 
 void ABS2026Pawn::Brake(const FInputActionValue& Value)
 {
+	// route the input
 	DoBrake(Value.Get<float>());
 }
 
 void ABS2026Pawn::StartBrake(const FInputActionValue& Value)
 {
+	// route the input
 	DoBrakeStart();
 }
 
 void ABS2026Pawn::StopBrake(const FInputActionValue& Value)
 {
+	// route the input
 	DoBrakeStop();
 }
 
 void ABS2026Pawn::StartHandbrake(const FInputActionValue& Value)
 {
+	// route the input
 	DoHandbrakeStart();
 }
 
 void ABS2026Pawn::StopHandbrake(const FInputActionValue& Value)
 {
+	// route the input
 	DoHandbrakeStop();
 }
 
 void ABS2026Pawn::LookAround(const FInputActionValue& Value)
 {
+	// route the input
 	DoLookAround(Value.Get<float>());
 }
 
 void ABS2026Pawn::ToggleCamera(const FInputActionValue& Value)
 {
+	// route the input
 	DoToggleCamera();
 }
 
 void ABS2026Pawn::ResetVehicle(const FInputActionValue& Value)
 {
+	// route the input
 	DoResetVehicle();
 }
 
 void ABS2026Pawn::DoSteering(float SteeringValue)
 {
-	// Route through the prediction component so the server history buffer
-	// stays in sync with the actual inputs that drove the simulation.
-	NetworkPredictionComponent->SetSteeringInput(SteeringValue);
+	// add the input
+	ChaosVehicleMovement->SetSteeringInput(SteeringValue);
 }
 
 void ABS2026Pawn::DoThrottle(float ThrottleValue)
 {
-	NetworkPredictionComponent->SetThrottleInput(ThrottleValue);
-	NetworkPredictionComponent->SetBrakeInput(0.0f);
+	// add the input
+	ChaosVehicleMovement->SetThrottleInput(ThrottleValue);
+
+	// reset the brake input
+	ChaosVehicleMovement->SetBrakeInput(0.0f);
 }
 
 void ABS2026Pawn::DoBrake(float BrakeValue)
 {
-	NetworkPredictionComponent->SetBrakeInput(BrakeValue);
-	NetworkPredictionComponent->SetThrottleInput(0.0f);
+	// add the input
+	ChaosVehicleMovement->SetBrakeInput(BrakeValue);
+
+	// reset the throttle input
+	ChaosVehicleMovement->SetThrottleInput(0.0f);
 }
 
 void ABS2026Pawn::DoBrakeStart()
 {
+	// call the Blueprint hook for the brake lights
 	BrakeLights(true);
 }
 
 void ABS2026Pawn::DoBrakeStop()
 {
+	// call the Blueprint hook for the brake lights
 	BrakeLights(false);
-	NetworkPredictionComponent->SetBrakeInput(0.0f);
+
+	// reset brake input to zero
+	ChaosVehicleMovement->SetBrakeInput(0.0f);
 }
 
 void ABS2026Pawn::DoHandbrakeStart()
 {
-	NetworkPredictionComponent->SetHandbrakeInput(true);
+	// add the input
+	ChaosVehicleMovement->SetHandbrakeInput(true);
+
+	// call the Blueprint hook for the break lights
 	BrakeLights(true);
 }
 
 void ABS2026Pawn::DoHandbrakeStop()
 {
-	NetworkPredictionComponent->SetHandbrakeInput(false);
+	// add the input
+	ChaosVehicleMovement->SetHandbrakeInput(false);
+
+	// call the Blueprint hook for the break lights
 	BrakeLights(false);
 }
 
 void ABS2026Pawn::DoLookAround(float YawDelta)
 {
+	// rotate the spring arm
 	BackSpringArm->AddLocalRotation(FRotator(0.0f, YawDelta, 0.0f));
 }
 
 void ABS2026Pawn::DoToggleCamera()
 {
+	// toggle the active camera flag
 	bFrontCameraActive = !bFrontCameraActive;
+
 	FrontCamera->SetActive(bFrontCameraActive);
 	BackCamera->SetActive(!bFrontCameraActive);
 }
@@ -326,71 +282,17 @@ void ABS2026Pawn::FlippedCheck()
 		// is this the second time we've checked that the vehicle is still flipped?
 		if (bPreviousFlipCheck)
 		{
+			// reset the vehicle to upright
 			DoResetVehicle();
 		}
+		
+		// set the flipped check flag so the next check resets the car
 		bPreviousFlipCheck = true;
-	}
-	else
-	{
+
+	} else {
+
+		// we're upright. reset the flipped check flag
 		bPreviousFlipCheck = false;
-	}
-}
-
-void ABS2026Pawn::OnHealthChanged(const FOnAttributeChangeData& ChangeData)
-{
-	// Only the server records kills and propagates death to the game state
-	if (!HasAuthority())
-	{
-		return;
-	}
-
-	if (ChangeData.NewValue <= 0.0f && ChangeData.OldValue > 0.0f)
-	{
-		// Record the kill in the game state
-		if (ABSGameState* GS = GetWorld()->GetGameState<ABSGameState>())
-		{
-			FString KillerName = TEXT("Unknown");
-			if (ChangeData.GEModData)
-			{
-				const FGameplayEffectContextHandle& Context =
-					ChangeData.GEModData->EffectSpec.GetEffectContext();
-				if (const AActor* InstigatorActor = Context.GetInstigator())
-				{
-					if (const APawn* InstigatorPawn = Cast<APawn>(InstigatorActor))
-					{
-						if (const AController* InstigatorController = InstigatorPawn->GetController())
-						{
-							if (const APlayerState* InstigatorPS = InstigatorController->PlayerState)
-							{
-								KillerName = InstigatorPS->GetPlayerName();
-
-								if (ABSPlayerState* KillerPS =
-									const_cast<ABSPlayerState*>(Cast<ABSPlayerState>(InstigatorPS)))
-								{
-									KillerPS->AddKill();
-									KillerPS->AddVehicleScore(1);
-								}
-							}
-						}
-					}
-				}
-			}
-
-			FString VictimName = TEXT("Unknown");
-			if (AController* Ctrl = GetController())
-			{
-				if (APlayerState* PS = Ctrl->PlayerState)
-				{
-					VictimName = PS->GetPlayerName();
-					if (ABSPlayerState* BSPS = Cast<ABSPlayerState>(PS))
-					{
-						BSPS->AddDeath();
-					}
-				}
-			}
-
-			GS->RecordKill(KillerName, VictimName);
-		}
 	}
 }
 

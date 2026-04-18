@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "GameplayEffectTypes.h"
 #include "BS2026PlayerController.generated.h"
 
 class UInputMappingContext;
@@ -52,11 +51,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Input|Steering Wheel Controls", meta = (EditCondition = "bUseSteeringWheelControls"))
 	UInputMappingContext* SteeringWheelInputMappingContext;
 
-	/**
-	 *  Type of vehicle to automatically respawn when it's destroyed.
-	 *  NOTE: In the multiplayer path this is handled by UGA_RespawnVehicle.
-	 *  This field is kept as a fallback for single-player / non-GAS scenarios.
-	 */
+	/** Type of vehicle to automatically respawn when it's destroyed */
 	UPROPERTY(EditAnywhere, Category="Vehicle|Respawn")
 	TSubclassOf<ABS2026Pawn> VehiclePawnClass;
 
@@ -70,7 +65,7 @@ protected:
 	/** Pointer to the UI widget */
 	UPROPERTY()
 	TObjectPtr<UBS2026UI> VehicleUI;
-
+		
 protected:
 
 	/** Gameplay initialization */
@@ -81,12 +76,7 @@ protected:
 
 public:
 
-	/**
-	 *  Update vehicle UI on tick.
-	 *  Speed and gear are polled from the physics simulation each frame because
-	 *  they are not GAS attributes; health changes are delivered via the GAS
-	 *  attribute-change delegate registered in OnPossess.
-	 */
+	/** Update vehicle UI on tick */
 	virtual void Tick(float Delta) override;
 
 protected:
@@ -94,21 +84,10 @@ protected:
 	/** Pawn setup */
 	virtual void OnPossess(APawn* InPawn) override;
 
-	/**
-	 *  Fallback respawn handler for single-player / non-GAS scenarios.
-	 *  In multiplayer the UGA_RespawnVehicle ability handles respawn
-	 *  server-authoritatively before this delegate fires.
-	 */
+	/** Handles pawn destruction and respawning */
 	UFUNCTION()
 	void OnPawnDestroyed(AActor* DestroyedPawn);
 
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
-
-	/**
-	 *  GAS attribute-change callback for Health.
-	 *  Bound in OnPossess; forwards the new value to the HUD widget
-	 *  without needing to poll every frame.
-	 */
-	void OnHealthAttributeChanged(const FOnAttributeChangeData& ChangeData);
 };
