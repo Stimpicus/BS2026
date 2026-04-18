@@ -76,8 +76,8 @@ void UBSGameInstance::FindAndJoinMatch()
 
 	SessionSearch = MakeShareable(new FOnlineSessionSearch());
 	SessionSearch->MaxSearchResults = 20;
-	SessionSearch->bIsLanQuery      = (OnlineSub->GetSubsystemName() == TEXT("NULL"));
-	SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
+	SessionSearch->bIsLanQuery = (OnlineSub->GetSubsystemName() == TEXT("NULL"));
+	SessionSearch->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
 
 	Sessions->OnFindSessionsCompleteDelegates.AddUObject(
 		this, &UBSGameInstance::OnFindSessionsComplete);

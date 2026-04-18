@@ -148,7 +148,7 @@ void UGA_FireWeapon::ServerPerformHitTrace(const FVector& TraceStart,
 	// ── Apply damage and cue if we hit a vehicle ──────────────────────
 	if (bHit)
 	{
-		if (ABS2026Pawn* HitVehicle = Cast<ABS2026Pawn>(HitResult.GetActor()))
+		if (ABS2026Pawn* HitVehicle = Cast(HitResult.GetActor()))
 		{
 			ApplyDamageToTarget(HitVehicle);
 
@@ -156,13 +156,16 @@ void UGA_FireWeapon::ServerPerformHitTrace(const FVector& TraceStart,
 			{
 				FGameplayCueParameters CueParams;
 				CueParams.Location = HitResult.ImpactPoint;
-				CueParams.Normal   = HitResult.ImpactNormal;
-				UAbilitySystemBlueprintLibrary::ExecuteGameplayCueOnActor(
-					HitVehicle, HitCueTag, CueParams);
+				CueParams.Normal = HitResult.ImpactNormal;
+
+				if (UAbilitySystemComponent* HitASC =
+					UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(HitVehicle))
+				{
+					HitASC->ExecuteGameplayCue(HitCueTag, CueParams);
+				}
 			}
 		}
 	}
-}
 
 void UGA_FireWeapon::ApplyDamageToTarget(ABS2026Pawn* TargetVehicle)
 {
