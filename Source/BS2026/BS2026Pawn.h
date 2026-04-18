@@ -4,23 +4,30 @@
 
 #include "CoreMinimal.h"
 #include "WheeledVehiclePawn.h"
+#include "AbilitySystemInterface.h"
 #include "BS2026Pawn.generated.h"
 
 class UCameraComponent;
 class USpringArmComponent;
 class UInputAction;
 class UChaosWheeledVehicleMovementComponent;
+class UBSAbilitySystemComponent;
+class UBSHealthSet;
+class UBSNetworkPredictionComponent;
+class UGameplayAbility;
 struct FInputActionValue;
+struct FOnAttributeChangeData;
 
 /**
  *  Vehicle Pawn class
  *  Handles common functionality for all vehicle types,
- *  including input handling and camera management.
- *  
+ *  including input handling, camera management, GAS health/damage,
+ *  and multiplayer physics replication.
+ *
  *  Specific vehicle configurations are handled in subclasses.
  */
 UCLASS(abstract)
-class ABS2026Pawn : public AWheeledVehiclePawn
+class ABS2026Pawn : public AWheeledVehiclePawn, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -39,6 +46,21 @@ class ABS2026Pawn : public AWheeledVehiclePawn
 	/** Back Camera component */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category ="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* BackCamera;
+
+	/** Ability System Component — owns GAS attributes (Health) and abilities */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category ="Components", meta = (AllowPrivateAccess = "true"))
+	UBSAbilitySystemComponent* AbilitySystemComponent;
+
+	/** Health attribute set — registered with AbilitySystemComponent in the constructor */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category ="Components", meta = (AllowPrivateAccess = "true"))
+	UBSHealthSet* HealthSet;
+
+	/**
+	 *  Network Prediction Component — server-broadcasts physics state to all clients
+	 *  and provides a lag-compensation history ring buffer for weapon traces.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category ="Components", meta = (AllowPrivateAccess = "true"))
+	UBSNetworkPredictionComponent* NetworkPredictionComponent;
 
 	/** Cast pointer to the Chaos Vehicle movement component */
 	TObjectPtr<UChaosWheeledVehicleMovementComponent> ChaosVehicleMovement;
@@ -73,6 +95,13 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* ResetVehicleAction;
 
+	/**
+	 *  Abilities granted to this pawn when possessed.
+	 *  Populate via Blueprint (e.g. BP_GA_FireWeapon, BP_GA_RespawnVehicle).
+	 */
+	UPROPERTY(EditAnywhere, Category="Abilities")
+	TArray<TSubclassOf<UGameplayAbility>> DefaultAbilities;
+
 	/** Keeps track of which camera is active */
 	bool bFrontCameraActive = false;
 
@@ -93,24 +122,22 @@ protected:
 public:
 	ABS2026Pawn();
 
+	// Begin IAbilitySystemInterface
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	// End IAbilitySystemInterface
+
 	// Begin Pawn interface
-
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-
 	// End Pawn interface
 
 	// Begin Actor interface
-
-	/** Initialization */
 	virtual void BeginPlay() override;
-
-	/** Cleanup */
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
-
-	/** Update */
 	virtual void Tick(float Delta) override;
-
 	// End Actor interface
+
+	/** Called when this pawn is possessed; grants default abilities on the server */
+	virtual void PossessedBy(AController* NewController) override;
 
 protected:
 
@@ -191,6 +218,9 @@ protected:
 	/** Checks if the car is flipped upside down and automatically resets it */
 	UFUNCTION()
 	void FlippedCheck();
+
+	/** Called on the server when Health reaches 0 via GAS; records the kill and cleans up */
+	void OnHealthChanged(const FOnAttributeChangeData& ChangeData);
 
 public:
 	/** Returns the front spring arm subobject */
