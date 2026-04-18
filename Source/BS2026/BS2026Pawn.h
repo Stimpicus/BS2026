@@ -14,6 +14,7 @@ class UChaosWheeledVehicleMovementComponent;
 class UBSAbilitySystemComponent;
 class UBSHealthSet;
 class UBSNetworkPredictionComponent;
+class UGameplayAbility;
 struct FInputActionValue;
 struct FOnAttributeChangeData;
 
